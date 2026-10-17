@@ -35,17 +35,18 @@ pstack skills use Cursor names. In Codex, read this file once per session, then 
 
 ## Models
 
-Codex takes the model and the reasoning effort as separate `spawn_agent` fields: `model` and `reasoning_effort`. The `spawn_agent` tool description lists the models and efforts this session accepts.
+Codex takes the model and the reasoning effort as separate `spawn_agent` fields: `model` and `reasoning_effort`. The `spawn_agent` tool description lists the models and efforts this session accepts, including models routed through opencodex such as `cursor/*` and `anthropic/*`. A model added to opencodex appears after Codex restarts.
 
 | Cursor | Codex |
 | --- | --- |
 | `claude-<family>-<version>-<effort>[-fast]`, such as `claude-opus-5-5-xhigh` | `model: "anthropic/claude-<family>-<version>"` and `reasoning_effort: "<effort>"`, when the session lists that model. Drop `-fast`. |
-| A `grok-*`, `cursor-grok-*` or `composer-*` slug | No Codex equivalent. Use the role's line in the model config below. With no line, use the `feature, refactoring` role's model and keep the slug's effort. |
+| A `grok-*` or `cursor-grok-*` slug | `model: "cursor/grok-<version>"`, such as `cursor/grok-4.7`, with the slug's effort token as `reasoning_effort`. Drop `-fast`. If the session does not list it, use the role's line in the model config, or the `feature, refactoring` role's model. |
+| A `composer-*` slug | No Codex equivalent. Use `cursor/grok-4.7` with the slug's effort, or the role's line in the model config. |
 | A `gpt-*` slug | The listed Codex model of the same name, with its effort token as `reasoning_effort`. |
 | The effort ladder `max` > `xhigh` > `high` > `medium` > `low` | The same values for `reasoning_effort`. Codex may also offer `ultra` above `max`. Use it only when the role's config line names it. |
 | Fast mode | No per-spawn speed control. Drop it. |
 | `auto` or `inherit-parent` | Omit `model` and `reasoning_effort`. |
-| The `pstack-models.mdc` rule | The model config `~/.codex/pstack/models.toml`. Each key under `[roles]` is a role label from poteto-mode, such as `"judgment and prose"`. Its value is `{ model = "…", effort = "…" }`, or an array of those for a panel role, or the string `"inherit-parent"`. A missing role keeps the skill default, mapped with the rows above. `setup-pstack` writes this file instead of the `.mdc` rule, and takes its detected models from the `spawn_agent` tool description. Never put role lines in `AGENTS.md`. |
+| The `pstack-models.mdc` rule | The model config `~/.codex/pstack/models.toml`. Each key under `[roles]` is a role label from poteto-mode, such as `"judgment and prose"`. Its value is `{ model = "…", effort = "…" }` with an optional `fallback = { model = "…", effort = "…" }`, or an array of those for a panel role, or the string `"inherit-parent"`. A missing role keeps the skill default, mapped with the rows above. `setup-pstack` writes this file instead of the `.mdc` rule, and takes its detected models from the `spawn_agent` tool description. Never put role lines in `AGENTS.md`. When a role has a fallback, spawn with the primary first. If the spawn is rejected, or the agent stops on a rate-limit, quota or usage-limit error, spawn a fresh agent with the fallback and the same brief, and say so. |
 
 ## Paths
 
