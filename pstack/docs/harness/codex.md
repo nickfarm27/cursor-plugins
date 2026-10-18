@@ -57,6 +57,14 @@ Codex takes the model and the reasoning effort as separate `spawn_agent` fields:
 | `.cursor/rules/*.mdc`, always-applied rules | The repository's `AGENTS.md`, or `~/.codex/AGENTS.md` for every repository. Model roles are the exception and live in `~/.codex/pstack/models.toml`. |
 | Transcripts in `~/.cursor/projects/<slug>/agent-transcripts/` | Prefer the thread tools: `list_threads` (each entry has `projectId` and `cwd`; the entry with status `active` is this chat) and `read_thread` (pages newest first; follow `nextCursor`). `list_threads` returns at most 50 threads. For older history, the raw logs are `~/.codex/sessions/YYYY/MM/DD/rollout-*-<threadId>.jsonl` and `~/.codex/archived_sessions/*.jsonl.zst`, and the thread-to-project map is `thread-project-assignments` in `~/.codex/.codex-global-state.json`. Read only the active project's threads. Some threads have no local log, so fall back to `read_thread`. Subagent threads are separate threads and do not appear under the parent. |
 
+## Long unattended runs on this Mac
+
+Cursor's cloud agents keep running when the laptop sleeps. Codex workers run on this Mac, so a run that outlives the operator's evening must keep the Mac awake and recover its own stalls.
+
+- **Keep the Mac awake.** Before an overnight or multi-hour run, start `caffeinate -i -t <seconds>` sized to the run in a long-lived `exec_command` session, and say so in the reply. It prevents idle sleep while the Mac is on power. A closed lid still sleeps unless an external display is attached, so tell the operator to leave it open. Stop it when the run ends.
+- **Heartbeats do not restart stopped agents.** A heartbeat wakes the coordinator, nothing else. A worker stopped by a rate limit, quota or usage limit stays stopped. Each tick checks every worker's status, and for any stopped one spawns a fresh agent with the consolidated brief (original brief, later directives, the stopped agent's last report and branch), on the role's fallback model when one is configured. Record each restart in the run's decision log.
+- **Usage resets.** When the operator has allowed a Codex usage reset, use `consume_usage_reset` only under the limit the run's standing orders name, and record it.
+
 ## Cursor-only features
 
 Bugbot, Cursor cloud agents, the `/in-cloud` command, Origin, and Cursor's pull request tool have no Codex equivalent. Use `gh` for every forge operation and triage review-bot comments the same way the skills triage Bugbot. Cursor Automations map to Codex automations through `automation_update`: a heartbeat for this thread, or a cron job for a standalone run. Say when you skip a step for this reason, and continue.
