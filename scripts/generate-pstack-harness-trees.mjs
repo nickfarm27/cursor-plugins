@@ -10,14 +10,17 @@ const SKILLS = join(PSTACK, "skills");
 const TEAM_KIT_SKILLS = join(ROOT, "cursor-team-kit", "skills");
 // Outside pstack/ so Cursor, which copies the whole plugin folder, does not install these trees too.
 const OUT = join(ROOT, "harness", "pstack");
+const GUIDE = "docs/guide";
 const COMMAND = "node scripts/generate-pstack-harness-trees.mjs";
 const GITHUB = "https://github.com/cursor/plugins";
 const LINK = /\]\(([^)\s]+)\)/g;
 const README = `# pstack harness tree
 
-This folder is generated from \`pstack/skills\`, \`pstack/agents\`, \`pstack/docs/harness/claude-code.md\`, \`pstack/docs/harness/codex.md\`, \`pstack/LICENSE\`, \`pstack/plugin.json\`, and three \`cursor-team-kit\` skills. Do not edit it by hand.
+This folder is generated from \`pstack/skills\`, \`pstack/agents\`, \`pstack/${GUIDE}\`, \`pstack/docs/harness/claude-code.md\`, \`pstack/docs/harness/codex.md\`, \`pstack/README.md\`, \`pstack/LICENSE\`, \`pstack/plugin.json\`, and three \`cursor-team-kit\` skills. Do not edit it by hand.
 
-Cursor uses \`pstack/\` directly. Claude Code installs \`claude-code/\` and Codex installs \`codex/\`. The trees leave out the rest of \`pstack/docs\` and \`pstack/README.md\`. A relative link to a pstack file that a tree leaves out points at that file on GitHub \`main\` instead.
+Cursor uses \`pstack/\` directly. Claude Code installs \`claude-code/\` and Codex installs \`codex/\`. The trees leave out the rest of \`pstack/\`, such as \`pstack/automations\` and \`pstack/assets\`. A relative link to a pstack file that a tree leaves out points at that file on GitHub \`main\` instead.
+
+The Codex tree leaves out \`make-bot-ui\`, which drives Cursor's Grok Bot routines, and adds the \`cursor-team-kit\` skills \`deslop\`, \`control-ui\`, and \`control-cli\`.
 
 After editing those sources, run \`${COMMAND}\` from the repository root and commit the result.
 `;
@@ -44,7 +47,7 @@ const TERMS = [
   { key: "~/.cursor/plugins/", re: /\.cursor\/plugins|\.cursor-plugin/ },
   { key: ".cursor/rules/", re: /\.cursor\/rules|always-applied rule/ },
   { key: "agent-transcripts", re: /agent-transcripts|\.cursor\/projects/ },
-  { key: "Cursor-only features", re: /Bugbot|Cursor [Aa]utomation|cursor\.(sh|com)\/automations|[Cc]loud [Aa]gent/ },
+  { key: "Cursor-only features", re: /Bugbot|Cursor [Aa]utomation|cursor\.(sh|com)\/automations|[Cc]loud [Aa]gent|built-in PR tool/ },
 ];
 // Cursor built-ins and cursor-team-kit names that only the Codex adapter maps.
 const CODEX_TERMS = [
@@ -54,6 +57,7 @@ const CODEX_TERMS = [
   { key: "`cursor-team-kit`", re: /cursor-team-kit/ },
 ];
 const ROUTE_KEY = "Run another pstack skill";
+const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const TREES = [
   {
@@ -130,7 +134,7 @@ function has(files, path) {
 function frontmatter(text, key) {
   const block = text.match(/^---\n([\s\S]*?)\n---/);
   const line = block?.[1].split("\n").find((entry) => entry.startsWith(`${key}:`));
-  return line?.slice(key.length + 1).trim();
+  return line?.slice(key.length + 1).trim().replace(/^(["'])(.*)\1$/, "$2");
 }
 
 function codexManifest() {
@@ -159,6 +163,10 @@ function render(tree) {
   for (const [skill, { usesCursorNames, wrap }] of classes) {
     if (usesCursorNames.size > 0 && !wrap) problems.push(`skills/${skill}/SKILL.md uses Cursor names but has no H1`);
     for (const key of usesCursorNames) users.set(key, [...(users.get(key) ?? []), skill]);
+    // Cursor runs a skill by its folder name and Codex and Claude Code list it by its frontmatter `name`, so the two must match. The Agent Skills spec limits both to SKILL_NAME.
+    const name = frontmatter(readFileSync(join(skillDir(tree, skill), "SKILL.md"), "utf8"), "name");
+    if (name !== skill) problems.push(`skills/${skill}/SKILL.md has name ${JSON.stringify(name ?? "")}, not its folder name ${skill}`);
+    if (!SKILL_NAME.test(skill) || skill.length > 64) problems.push(`skills/${skill} is not lowercase words joined by hyphens, at most 64 characters`);
   }
   const adapter = readFileSync(join(PSTACK, tree.adapter), "utf8");
   for (const [key, using] of users) {
@@ -167,11 +175,13 @@ function render(tree) {
   for (const problem of problems) console.log(`FAIL ${problem}`);
   if (problems.length > 0) process.exit(1);
 
-  // Skills read the adapter at runtime. The guide and the README stay on GitHub.
+  // Skills read the adapter, the guide, and the README at runtime, so the harness never fetches them.
   const copies = [
     ...allSkills.filter((skill) => !tree.exclude.includes(skill)).flatMap((skill) => walk(join(SKILLS, skill))),
     ...walk(join(PSTACK, "agents")),
+    ...walk(join(PSTACK, GUIDE)),
     join(PSTACK, tree.adapter),
+    join(PSTACK, "README.md"),
   ];
   const files = new Map(copies.map((path) => [relative(PSTACK, path), file(path)]));
   for (const skill of tree.teamKit) {
@@ -184,16 +194,11 @@ function render(tree) {
     `It maps the Cursor names in pstack skills to ${tree.harness}.`;
   for (const [skill, { wrap }] of classes) {
     const path = `skills/${skill}/SKILL.md`;
-    let text = files.get(path).bytes.toString("utf8");
-    if (wrap) text = text.replace(/^(# .*)\n+/m, `$1\n\n${line}\n\n`);
-    if (tree.codex) {
-      // Codex invokes a skill by its frontmatter name, so it has to match the folder.
-      if (frontmatter(text, "name") !== skill) text = text.replace(/^name: .*$/m, `name: ${skill}`);
-      if (frontmatter(text, "disable-model-invocation") === "true") {
-        files.set(`skills/${skill}/agents/openai.yaml`, { bytes: openaiYaml(skill), executable: false });
-      }
+    const text = files.get(path).bytes.toString("utf8");
+    if (tree.codex && frontmatter(text, "disable-model-invocation") === "true") {
+      files.set(`skills/${skill}/agents/openai.yaml`, { bytes: openaiYaml(skill), executable: false });
     }
-    files.get(path).bytes = Buffer.from(text);
+    if (wrap) files.get(path).bytes = Buffer.from(text.replace(/^(# .*)\n+/m, `$1\n\n${line}\n\n`));
   }
   files.set("LICENSE", file(join(PSTACK, "LICENSE")));
   for (const manifest of tree.manifests) {
@@ -253,4 +258,5 @@ if (process.argv.includes("--check")) {
   }
   for (const summary of summaries) console.log(summary);
 }
+
 
