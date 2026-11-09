@@ -14,6 +14,7 @@ pstack skills use Cursor names. In Codex, read this file once per session, then 
 | Wait for subagents before ending a turn | A finished subagent may not wake an idle parent. Keep the turn open with `wait_agent` (long timeouts, several ids at once) until every child you need has reported, or arm a heartbeat that drains them. Never end a coordinating turn with children still running and nothing scheduled to read them. |
 | `create-skill` (Cursor built-in) | The `skill-creator` system skill. A user-only skill also needs `agents/openai.yaml` with `policy.allow_implicit_invocation: false`. |
 | Cursor's built-in `babysit` | No Codex equivalent. The Babysit playbook stands alone. |
+| PR and CI event subscriptions | None in Codex. Read a PR's state with `gh pr view` and `gh pr checks` when a worker reports, and at each heartbeat tick if the run has one (see the `/loop` row). |
 | `/deslop`, `control-ui`, `control-cli` from `cursor-team-kit` | Bundled in this plugin as `<pstack>/skills/deslop`, `control-ui` and `control-cli`. For `control-ui`, prefer the session's browser or computer-use tools when they reach the app, and fall back to Playwright. For `control-cli`, drive the program through `exec_command` with `tty: true` and `write_stdin`, or tmux. |
 | `Grep`, `Glob` | `rg` and `rg --files` through `exec_command`. |
 
@@ -46,6 +47,7 @@ Codex takes the model and the reasoning effort as separate `spawn_agent` fields:
 | The effort ladder `max` > `xhigh` > `high` > `medium` > `low` | The same values for `reasoning_effort`. Codex may also offer `ultra` above `max`. Use it only when the role's config line names it. |
 | Fast mode | No per-spawn speed control. Drop it. |
 | `auto` or `inherit-parent` | Omit `model` and `reasoning_effort`. |
+| Arena's model families (`claude-*`, and `grok-*` with `cursor-grok-*` and `composer-*`) | `anthropic/claude-*` is the `claude-*` family and `cursor/grok-*` the `grok-*` family. Every other provider's models form a family of their own, so all `gpt-*` models are one family. Compare the parent's model and each pool entry this way. |
 | The `pstack-models.mdc` rule | The model config `~/.codex/pstack/models.toml`. Each key under `[roles]` is a role label from poteto-mode, such as `"judgment and prose"`. Its value is `{ model = "…", effort = "…" }` with an optional `fallback = { model = "…", effort = "…" }`, or an array of those for a panel role, or the string `"inherit-parent"`. A missing role keeps the skill default, mapped with the rows above. `setup-pstack` writes this file instead of the `.mdc` rule, and takes its detected models from the `spawn_agent` tool description. Never put role lines in `AGENTS.md`. When a role has a fallback, spawn with the primary first. If the spawn is rejected, or the agent stops on a rate-limit, quota or usage-limit error, spawn a fresh agent with the fallback and the same brief, and say so. |
 
 ## Paths
@@ -55,6 +57,8 @@ Codex takes the model and the reasoning effort as separate `spawn_agent` fields:
 | `.cursor/skills/`, `~/.cursor/skills/` | A repository's `.agents/skills/`, or `~/.codex/skills/` for a personal skill. |
 | `~/.cursor/plugins/`, `.cursor-plugin/plugin.json` | `~/.codex/plugins/cache/`, `.codex-plugin/plugin.json`. |
 | `.cursor/rules/*.mdc`, always-applied rules | The repository's `AGENTS.md`, or `~/.codex/AGENTS.md` for every repository. Model roles are the exception and live in `~/.codex/pstack/models.toml`. |
+| The agent store, or the root agent's store whose path Cursor puts in the system prompt | Codex has none and gives no store path. Use a folder outside the repository that every chat of the task can read: the run folder that `AGENTS.md` or the invoking skill names, else `~/.codex/pstack/store/<repo>-<task>/`. Say which folder you chose. |
+| Orchestrate's Project tracker (`notes.md`) and Project store | Codex projects hold neither. Keep the tracker as `notes.md` in the agent store folder above, and the rest of the program's state beside it. |
 | Transcripts in `~/.cursor/projects/<slug>/agent-transcripts/` | Prefer the thread tools: `list_threads` (each entry has `projectId` and `cwd`; the entry with status `active` is this chat) and `read_thread` (pages newest first; follow `nextCursor`). `list_threads` returns at most 50 threads. For older history, the raw logs are `~/.codex/sessions/YYYY/MM/DD/rollout-*-<threadId>.jsonl` and `~/.codex/archived_sessions/*.jsonl.zst`, and the thread-to-project map is `thread-project-assignments` in `~/.codex/.codex-global-state.json`. Read only the active project's threads. Some threads have no local log, so fall back to `read_thread`. Subagent threads are separate threads and do not appear under the parent. |
 
 ## Long unattended runs on this Mac
