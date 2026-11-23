@@ -56,7 +56,8 @@ const CODEX_TERMS = [
   { key: "`babysit`", re: /built-in babysit|babysit skill/ },
   { key: "`cursor-team-kit`", re: /cursor-team-kit/ },
   { key: "The agent store", re: /\bagent(?:'s)? store\b/ },
-  { key: "Project tracker", re: /\bProject (?:tracker|store)\b/ },
+  { key: "Project worker", re: /\bProject workers?\b/ },
+  { key: "gemini-", re: /\bgemini-\d/ },
   { key: "PR and CI event subscriptions", re: /\bevent subscriptions?\b/ },
 ];
 const ROUTE_KEY = "Run another pstack skill";
