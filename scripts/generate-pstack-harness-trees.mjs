@@ -57,7 +57,7 @@ const CODEX_TERMS = [
   { key: "`cursor-team-kit`", re: /cursor-team-kit/ },
   { key: "The agent store", re: /\bagent(?:'s)? store\b/ },
   { key: "Project worker", re: /\bProject workers?\b/ },
-  { key: "gemini-", re: /\bgemini-\d/ },
+  { key: "A `gemini-*` slug", re: /\bgemini-\d/ },
   { key: "PR and CI event subscriptions", re: /\bevent subscriptions?\b/ },
 ];
 const ROUTE_KEY = "Run another pstack skill";
@@ -173,8 +173,10 @@ function render(tree) {
     if (!SKILL_NAME.test(skill) || skill.length > 64) problems.push(`skills/${skill} is not lowercase words joined by hyphens, at most 64 characters`);
   }
   const adapter = readFileSync(join(PSTACK, tree.adapter), "utf8");
+  // A term is mapped by the table row or section that names it, so a mention in another row's mapping does not count.
+  const mapped = adapter.split("\n").flatMap((line) => (/^#+ /.test(line) ? [line] : (/^\|([^|]*)\|/.exec(line)?.slice(1) ?? [])));
   for (const [key, using] of users) {
-    if (!adapter.includes(key)) problems.push(`${tree.harness} adapter has no row for ${key}, used by ${using.join(", ")}`);
+    if (!mapped.some((name) => name.includes(key))) problems.push(`${tree.harness} adapter has no row for ${key}, used by ${using.join(", ")}`);
   }
   for (const problem of problems) console.log(`FAIL ${problem}`);
   if (problems.length > 0) process.exit(1);
